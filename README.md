@@ -1,5 +1,9 @@
 This is a prototype for next-generation GUI for BleachBit.
 
+This is a video of progress as of October 5, 2024. The major changes are on the right pane, allowing the user to sort and filter the results of the preview or clean. The file results also have a context menu. Thx CrackHub for ideas!
+
+[![Still Image](https://pbs.twimg.com/ext_tw_video_thumb/1842799515738275840/pu/img/cOfR42gxz_3XRSYb.jpg)](https://x.com/bleachbit/status/1842800707142848868)
+
 # Known issues
 
 There are many missing features. Most notably, this GUI is not integrated with any cleaners or the file system, and all the information is example data just for show, so it "doesn't do anything."
