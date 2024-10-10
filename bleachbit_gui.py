@@ -33,7 +33,7 @@ from gi.repository import Gtk
 
 class BleachBitWindow(Gtk.Window):
     def __init__(self):
-        super().__init__(title="BleachBit Prototype of Next-Generation GUI")
+        super().__init__(title="Prototype of Next-Generation GUI for BleachBit")
         self.set_default_size(1000, 400)
 
         # Create a vertical box to hold the menubar, toolbar, and panes.
@@ -321,10 +321,17 @@ class BleachBitWindow(Gtk.Window):
         thread.start()
 
     def _populate_data(self, is_delete=True):
-        """In background thread, populate the data"""
+        """In background thread, run a worker and populate the liststore"""
         self.abort_button.set_sensitive(True)
+        self.liststore.clear()
+        for row in self._populate_data_iterator(is_delete):
+            self.liststore.append(row)
+        self.abort_button.set_sensitive(False)
+
+    def _populate_data_iterator(self, is_delete=True):
+        """Simulate a worker iterator that cleans the system"""
         num_files = random.randint(5, 50)
-        for i in range(num_files):
+        for _ in range(num_files):
             cleaner_name = random.choice(["Chrome", "Firefox", "Edge"])
             option_name = random.choice(
                 ["Cache", "History", "Cookies", "Sessions", "Passwords"])
@@ -346,13 +353,12 @@ class BleachBitWindow(Gtk.Window):
                 result = ""
 
             # Sleep simulates waiting for disk I/O.
+            # Delete is slower than preview.
             sleep_time_sec = random.uniform(0.01, 0.2)
             if not is_delete:
                 sleep_time_sec = sleep_time_sec/10
             time.sleep(sleep_time_sec)
-            self.liststore.append(
-                [cleaner_name, option_name, filename, size, result])
-        self.abort_button.set_sensitive(False)
+            yield [cleaner_name, option_name, filename, size, result]
 
     def on_preview_clicked(self, button):
         # Clear the previous cleaning results and populate a new list of files
