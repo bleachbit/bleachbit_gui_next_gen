@@ -122,6 +122,7 @@ class BleachBitWindow(Gtk.Window):
 
         selected_column = Gtk.TreeViewColumn("Selected")
         selected_renderer = Gtk.CellRendererToggle()
+        selected_renderer.connect("toggled", self.on_option_toggled)
         selected_column.pack_start(selected_renderer, True)
         selected_column.add_attribute(selected_renderer, "active", 1)
         self.treeview_options.append_column(selected_column)
@@ -130,6 +131,31 @@ class BleachBitWindow(Gtk.Window):
         self.populate_options_pane()
 
         paned.add1(vbox)
+
+    def on_option_toggled(self, cell, path):
+        model = self.treeview_options.get_model()
+        iter = model.get_iter(path)
+        value = not model.get_value(iter, 1)
+        model.set_value(iter, 1, value)
+
+        # Update children
+        if model.iter_has_child(iter):
+            child_iter = model.iter_children(iter)
+            while child_iter:
+                model.set_value(child_iter, 1, value)
+                child_iter = model.iter_next(child_iter)
+
+        # Update parent
+        parent_iter = model.iter_parent(iter)
+        if parent_iter:
+            child_iter = model.iter_children(parent_iter)
+            has_active_child = False
+            while child_iter:
+                if model.get_value(child_iter, 1):
+                    has_active_child = True
+                    break
+                child_iter = model.iter_next(child_iter)
+        model.set_value(parent_iter, 1, has_active_child)
 
     def on_search_entry_changed(self, entry):
         """Callback function for user typing in the options search box."""
