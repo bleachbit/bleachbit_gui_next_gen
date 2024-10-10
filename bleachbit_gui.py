@@ -155,7 +155,7 @@ class BleachBitWindow(Gtk.Window):
                     has_active_child = True
                     break
                 child_iter = model.iter_next(child_iter)
-        model.set_value(parent_iter, 1, has_active_child)
+            model.set_value(parent_iter, 1, has_active_child)
 
     def on_search_entry_changed(self, entry):
         """Callback function for user typing in the options search box."""
