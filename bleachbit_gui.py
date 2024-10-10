@@ -49,6 +49,9 @@ class BleachBitWindow(Gtk.Window):
         vbox.pack_start(paned, True, True, 0)
         self.create_options_pane(paned)
         self.create_results_pane(paned)
+        
+        # Coordinate the abort button
+        self.abort_event = threading.Event()
 
     def create_menubar(self, vbox):
         """Create a menu bar"""
@@ -202,6 +205,7 @@ class BleachBitWindow(Gtk.Window):
         self.abort_button = Gtk.ToolButton(
             stock_id=Gtk.STOCK_STOP, label="Abort")
         self.abort_button.set_sensitive(False)
+        self.abort_button.connect("clicked", self.on_abort_clicked)
         toolbar.insert(self.abort_button, 2)
 
         self.whitelist_button = Gtk.ToolButton(
@@ -211,6 +215,7 @@ class BleachBitWindow(Gtk.Window):
         self.whitelist_button.set_sensitive(False)
 
         vbox.pack_start(toolbar, False, False, 0)
+
 
     def create_results_pane(self, paned):
         """Create a pane for search results
@@ -275,6 +280,10 @@ class BleachBitWindow(Gtk.Window):
 
         self.treeview.get_selection().connect("changed", self.on_selection_changed)
 
+    def on_abort_clicked(self, button):
+        """Callback function for abort button"""
+        self.abort_event.set()
+
     def on_selection_changed(self, selection):
         """Enable whitelist button on toolbar when 1+ rows are selected"""
         model, paths = selection.get_selected_rows()
@@ -322,9 +331,12 @@ class BleachBitWindow(Gtk.Window):
 
     def _populate_data(self, is_delete=True):
         """In background thread, run a worker and populate the liststore"""
+        self.abort_event.clear()
         self.abort_button.set_sensitive(True)
         self.liststore.clear()
         for row in self._populate_data_iterator(is_delete):
+            if self.abort_event.is_set():
+                break
             self.liststore.append(row)
         self.abort_button.set_sensitive(False)
 
