@@ -50,6 +50,10 @@ class BleachBitWindow(Gtk.Window):
         self.create_options_pane(paned)
         self.create_results_pane(paned)
         
+        # Add status bar
+        self.statusbar = Gtk.Statusbar()
+        vbox.pack_start(self.statusbar, False, False, 0)
+        
         # Coordinate the abort button
         self.abort_event = threading.Event()
 
@@ -303,7 +307,7 @@ class BleachBitWindow(Gtk.Window):
         column.set_sort_column_id(4)
         self.results_treeview.append_column(column)
 
-        # Allow user to seelct multple rows for whitelisting.
+        # Allow user to select multple rows for whitelisting.
         self.results_treeview.get_selection().set_mode(Gtk.SelectionMode.MULTIPLE)
 
         # Add a context menu.
@@ -340,11 +344,15 @@ class BleachBitWindow(Gtk.Window):
         sensitive = len(paths) > 0
         self.whitelist_button.set_sensitive(sensitive)
 
-    def on_copy_path_activated(self, widget, filename):
+    def on_copy_path_activated(self, widget, filenames):
         """Copy filename to clipboard"""
         from gi.repository import Gdk
         clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
-        clipboard.set_text(filename, -1)
+        if len(filenames) == 1:
+            self.statusbar.push(0, f"Copied {filenames[0]} to clipboard")
+        else:
+            self.statusbar.push(0, f"Copied {len(filenames)} filenames to clipboard")
+        clipboard.set_text('\n'.join(filenames), -1)
 
     def on_file_result_context_menu(self, widget, event):
         """Show a context menu for file result"""
@@ -353,25 +361,23 @@ class BleachBitWindow(Gtk.Window):
             return
         selection = self.results_treeview.get_selection()
         model, pathlist = selection.get_selected_rows()
+        filenames = []
         for path in pathlist:
             tree_iter = model.get_iter(path)
-            filename = model.get_value(tree_iter, 2)
-            menu = Gtk.Menu()
-            copy_path_item = Gtk.MenuItem.new_with_label("Copy path")
-            copy_path_item.connect(
-                "activate", self.on_copy_path_activated, filename)
-            menu.append(copy_path_item)
-            open_file_location_item = Gtk.MenuItem.new_with_label(
-                "Open file location")
-            copy_path_item.connect(
-                "activate", self.on_copy_path_activated, filename)
-
-            menu.append(open_file_location_item)
-            whitelist_item = Gtk.MenuItem.new_with_label("Whitelist")
-            # whitelist_item.connect("activate", self.on_whitelist_activated, filename)
-            menu.append(whitelist_item)
-            menu.show_all()
-            menu.popup(None, None, None, None, event.button, event.time)
+            filenames.append(model.get_value(tree_iter, 2))
+        menu = Gtk.Menu()
+        copy_path_item = Gtk.MenuItem.new_with_label("Copy path")
+        copy_path_item.connect("activate", self.on_copy_path_activated, filenames)
+        menu.append(copy_path_item)
+        open_file_location_item = Gtk.MenuItem.new_with_label("Open file location")
+        menu.append(open_file_location_item)
+        whitelist_item = Gtk.MenuItem.new_with_label("Whitelist")
+        # whitelist_item.connect("activate", self.on_whitelist_activated, filename)
+        menu.append(whitelist_item)
+        menu.show_all()
+        menu.popup(None, None, None, None, event.button, event.time)
+        # True maintains selection of multiple rows.
+        return True
 
     def populate_data(self, is_delete=True):
         """Launch a thread to populate the data"""
