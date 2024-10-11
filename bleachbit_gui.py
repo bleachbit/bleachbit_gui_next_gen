@@ -317,7 +317,8 @@ class BleachBitWindow(Gtk.Window):
         self.search_entry_text = entry.get_text()
         self.liststore_filter = self.results_liststore.filter_new()
         self.liststore_filter.set_visible_func(self.on_results_search_changed_filter)
-        self.results_treeview.set_model(self.liststore_filter)
+        self.sorted_model = Gtk.TreeModelSort(model=self.liststore_filter)
+        self.results_treeview.set_model(self.sorted_model)
         
     def on_results_search_changed_filter(self, model, iter, data):
         if not self.search_entry_text:
