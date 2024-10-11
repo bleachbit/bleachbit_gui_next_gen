@@ -368,9 +368,31 @@ class BleachBitWindow(Gtk.Window):
 
     def _populate_data_iterator(self, is_delete=True):
         """Simulate a worker iterator that cleans the system"""
-        num_files = random.randint(5, 50)
+        num_files = random.randint(5, 100)
         for _ in range(num_files):
-            cleaner_name = random.choice(["Chrome", "Firefox", "Edge"])
+            cleaner_name = random.choice(["Chrome", "Firefox", "Edge","System"])
+            if cleaner_name == 'System':
+                option_name = random.choice(('Cache','Logs','Temporary files'))
+                service_name = random.choice([
+                    "pancake-flipper",
+                    "unicorn-tracker",
+                    "robot-reporter",
+                    "cloud-catcher",
+                    "whale-watcher",
+                    "dragon-dreamer",
+                    "octopus-oracle",
+                    "penguin-patrol",
+                    "koala-keeper",
+                    "zebra-zapper",
+                    "taco-teller"])
+                
+                root_dir = {
+                    'Cache': '~/.cache',
+                    'Logs': '/var/log',
+                    'Temporary files': '/tmp'
+                }.get(option_name)
+                filename = os.path.join(root_dir, f'{service_name}/foo-{str(random.randint(0, 100))}.bar')
+            else:
             option_name = random.choice(
                 ["Cache", "History", "Cookies", "Sessions", "Passwords"])
             filename = os.path.join(os.path.expanduser(
@@ -378,7 +400,7 @@ class BleachBitWindow(Gtk.Window):
             if option_name == 'Cache':
                 filename = os.path.join(os.path.expanduser(
                     "~"), ".cache", cleaner_name, str(random.randint(0, 100)))
-            size = random.randint(0, 10000)
+            size = random.randint(0, 100000)
             result_random = random.random()
             if is_delete:
                 if result_random < 0.05:
