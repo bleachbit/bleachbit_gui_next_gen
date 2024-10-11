@@ -98,7 +98,7 @@ class BleachBitWindow(Gtk.Window):
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
 
         # Create a search box to filter the options.
-        self.search_entry = Gtk.Entry(width_chars=20)
+        self.search_entry = Gtk.SearchEntry(width_chars=20)
         self.search_entry.set_placeholder_text("Search")
         self.search_entry_text = None
         self.search_entry.connect("changed", self.on_search_entry_changed)
@@ -265,9 +265,9 @@ class BleachBitWindow(Gtk.Window):
         paned.add2(vbox)
 
         # Create a search box
-        search_entry = Gtk.Entry(width_chars=100)
+        search_entry = Gtk.SearchEntry(width_chars=100)
         search_entry.set_placeholder_text("Search")
-        # search_entry.connect("changed", self.on_results_search_changed)
+        search_entry.connect("changed", self.on_results_search_changed)
         vbox.pack_start(search_entry, False, False, 0)
 
         # Create a TreeView to display the cleaning results
@@ -312,7 +312,22 @@ class BleachBitWindow(Gtk.Window):
 
         self.results_treeview.get_selection().connect("changed", self.on_selection_changed)
 
-        self.treeview.get_selection().connect("changed", self.on_selection_changed)
+    def on_results_search_changed(self, entry):
+        """Callback function for search box"""
+        self.search_entry_text = entry.get_text()
+        self.liststore_filter = self.results_liststore.filter_new()
+        self.liststore_filter.set_visible_func(self.on_results_search_changed_filter)
+        self.results_treeview.set_model(self.liststore_filter)
+        
+    def on_results_search_changed_filter(self, model, iter, data):
+        if not self.search_entry_text:
+            return True
+        for i in range(3):
+            current_row = model.get_value(iter, i)
+            if current_row.lower().find(self.search_entry_text.lower()) != -1:
+                return True
+        return False
+        
 
     def on_abort_clicked(self, button):
         """Callback function for abort button"""
