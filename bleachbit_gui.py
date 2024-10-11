@@ -18,8 +18,16 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+"""
+
+
+FIXME:
+Feature to deselect individual items in preview results #3
+https://github.com/bleachbit/wishlist/issues/3
+"""
 
 # standard library imports
+
 import os
 import random
 import time
@@ -29,6 +37,32 @@ import threading
 import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk
+
+cleaner_data = {
+    "Chrome": {
+        "Cache": {"path": "~/.cache/chrome/{randint}", "desc": "Temporary files"},
+        "History": {"path": "~/.config/chrome/History.{randint}", "desc": "Sites you visited"},
+        "Cookies": {"path": "~/.config/chrome/Cookies.{randint}", "desc": "Cookies are delicious treats"},
+        "Passwords": {"path": "~/.config/chrome/Passwords.{randint}", "desc": "Secret username and password"}
+    },
+    "Firefox": {
+        "Cache": {"path": "~/.config/firefox/Cache.{randint}", "desc": "Temporary files"},
+        "History": {"path": "~/.config/firefox/History.{randint}", "desc": "Sites you visited"},
+        "Cookies": {"path": "~/.config/firefox/Cookies.{randint}", "desc": "Cookies are delicious treats"},
+        "Passwords": {"path": "~/.config/firefox/Passwords.{randint}", "desc": "Secret username and password"}
+    },
+    "Edge": {
+        "Cache": {"path": "~/.config/edge/Cache.{randint}", "desc": "Temporary files"},
+        "History": {"path": "~/.config/edge/History.{randint}", "desc": "Sites you visited"},
+        "Cookies": {"path": "~/.config/edge/Cookies.{randint}", "desc": "Cookies are delicious treats"},
+        "Passwords": {"path": "~/.config/edge/Passwords.{randint}", "desc": "Secret username and password"}
+    },
+    "System": {
+        "Cache": {"path": "~/.cache/{service_name}/{randint}", "desc": "System Cache"},
+        "Logs": {"path": "/var/log/{service_name}/{randint}.log", "desc": "System Logs"},
+        "Temporary files": {"path": "/tmp/{service_name}/{randint}.tmp", "desc": "System Temporary files"}
+    }
+}
 
 
 class BleachBitWindow(Gtk.Window):
@@ -49,11 +83,11 @@ class BleachBitWindow(Gtk.Window):
         vbox.pack_start(paned, True, True, 0)
         self.create_options_pane(paned)
         self.create_results_pane(paned)
-        
+
         # Add status bar
         self.statusbar = Gtk.Statusbar()
         vbox.pack_start(self.statusbar, False, False, 0)
-        
+
         # Coordinate the abort button
         self.abort_event = threading.Event()
 
@@ -127,6 +161,7 @@ class BleachBitWindow(Gtk.Window):
         selected_column = Gtk.TreeViewColumn("Selected")
         selected_renderer = Gtk.CellRendererToggle()
         selected_renderer.connect("toggled", self.on_option_toggled)
+
         selected_column.pack_start(selected_renderer, True)
         selected_column.add_attribute(selected_renderer, "active", 1)
         self.treeview_options.append_column(selected_column)
@@ -137,7 +172,7 @@ class BleachBitWindow(Gtk.Window):
         paned.add1(vbox)
 
     def on_option_toggled(self, cell, path):
-        """Callback function for toggling an option
+        """Callback for toggling an option (e.g., Chrome - Cache)
 
         Toggling a parent option also toggles all its children.
         When a child is toggled on, the parent is also toggled on.
@@ -211,15 +246,7 @@ class BleachBitWindow(Gtk.Window):
 
         This is example data for demonstration.
         """
-        browser_options = ["Cache", "History",
-                           "Cookies", "Sessions", "Passwords"]
-        sample_data = {
-            "Firefox": browser_options,
-            "Chrome": browser_options,
-            "Edge": browser_options,
-            "System": ['Cache', 'Clipboard', 'Custom', 'Logs', 'Temporary files', 'Trash']
-        }
-        for parent, children in sample_data.items():
+        for parent, children in cleaner_data.items():
             parent_iter = self.treestore_options.append(None, [parent, True])
             for child in children:
                 self.treestore_options.append(parent_iter, [child, True])
@@ -251,7 +278,6 @@ class BleachBitWindow(Gtk.Window):
         self.whitelist_button.set_sensitive(False)
 
         vbox.pack_start(toolbar, False, False, 0)
-
 
     def create_results_pane(self, paned):
         """Create a pane for search results
@@ -312,18 +338,20 @@ class BleachBitWindow(Gtk.Window):
 
         # Add a context menu.
         self.results_treeview.connect("button-press-event",
-                              self.on_file_result_context_menu)
+                                      self.on_file_result_context_menu)
 
-        self.results_treeview.get_selection().connect("changed", self.on_selection_changed)
+        self.results_treeview.get_selection().connect(
+            "changed", self.on_selection_changed)
 
     def on_results_search_changed(self, entry):
         """Callback function for search box"""
         self.search_entry_text = entry.get_text()
         self.liststore_filter = self.results_liststore.filter_new()
-        self.liststore_filter.set_visible_func(self.on_results_search_changed_filter)
+        self.liststore_filter.set_visible_func(
+            self.on_results_search_changed_filter)
         self.sorted_model = Gtk.TreeModelSort(model=self.liststore_filter)
         self.results_treeview.set_model(self.sorted_model)
-        
+
     def on_results_search_changed_filter(self, model, iter, data):
         if not self.search_entry_text:
             return True
@@ -332,7 +360,6 @@ class BleachBitWindow(Gtk.Window):
             if current_row.lower().find(self.search_entry_text.lower()) != -1:
                 return True
         return False
-        
 
     def on_abort_clicked(self, button):
         """Callback function for abort button"""
@@ -351,7 +378,8 @@ class BleachBitWindow(Gtk.Window):
         if len(filenames) == 1:
             self.statusbar.push(0, f"Copied {filenames[0]} to clipboard")
         else:
-            self.statusbar.push(0, f"Copied {len(filenames)} filenames to clipboard")
+            self.statusbar.push(
+                0, f"Copied {len(filenames)} filenames to clipboard")
         clipboard.set_text('\n'.join(filenames), -1)
 
     def on_file_result_context_menu(self, widget, event):
@@ -367,9 +395,11 @@ class BleachBitWindow(Gtk.Window):
             filenames.append(model.get_value(tree_iter, 2))
         menu = Gtk.Menu()
         copy_path_item = Gtk.MenuItem.new_with_label("Copy path")
-        copy_path_item.connect("activate", self.on_copy_path_activated, filenames)
+        copy_path_item.connect(
+            "activate", self.on_copy_path_activated, filenames)
         menu.append(copy_path_item)
-        open_file_location_item = Gtk.MenuItem.new_with_label("Open file location")
+        open_file_location_item = Gtk.MenuItem.new_with_label(
+            "Open file location")
         menu.append(open_file_location_item)
         whitelist_item = Gtk.MenuItem.new_with_label("Whitelist")
         # whitelist_item.connect("activate", self.on_whitelist_activated, filename)
@@ -400,36 +430,24 @@ class BleachBitWindow(Gtk.Window):
         """Simulate a worker iterator that cleans the system"""
         num_files = random.randint(5, 100)
         for _ in range(num_files):
-            cleaner_name = random.choice(["Chrome", "Firefox", "Edge","System"])
-            if cleaner_name == 'System':
-                option_name = random.choice(('Cache','Logs','Temporary files'))
-                service_name = random.choice([
-                    "pancake-flipper",
-                    "unicorn-tracker",
-                    "robot-reporter",
-                    "cloud-catcher",
-                    "whale-watcher",
-                    "dragon-dreamer",
-                    "octopus-oracle",
-                    "penguin-patrol",
-                    "koala-keeper",
-                    "zebra-zapper",
-                    "taco-teller"])
-                
-                root_dir = {
-                    'Cache': '~/.cache',
-                    'Logs': '/var/log',
-                    'Temporary files': '/tmp'
-                }.get(option_name)
-                filename = os.path.join(root_dir, f'{service_name}/foo-{str(random.randint(0, 100))}.bar')
-            else:
-                option_name = random.choice(
-                    ["Cache", "History", "Cookies", "Sessions", "Passwords"])
-                filename = os.path.join(os.path.expanduser(
-                    "~"), ".config", cleaner_name, option_name, str(random.randint(0, 100)))
-                if option_name == 'Cache':
-                    filename = os.path.join(os.path.expanduser(
-                        "~"), ".cache", cleaner_name, str(random.randint(0, 100)))
+
+            cleaner_name = random.choice(list(cleaner_data.keys()))
+            option_name = random.choice(
+                list(cleaner_data[cleaner_name].keys()))
+            data = cleaner_data[cleaner_name][option_name]
+            service_name=random.choice([
+                "pancake-flipper",
+                "unicorn-tracker",
+                "robot-reporter",
+                "cloud-catcher",
+                "whale-watcher",
+                "dragon-dreamer",
+                "octopus-oracle",
+                "penguin-patrol",
+                "koala-keeper",
+                "zebra-zapper",
+                "taco-teller"])
+            filename = data["path"].format(randint=str(random.randint(0, 100)), service_name=service_name)
             size = random.randint(0, 100000)
             result_random = random.random()
             if is_delete:
