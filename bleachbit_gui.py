@@ -133,6 +133,12 @@ class BleachBitWindow(Gtk.Window):
         paned.add1(vbox)
 
     def on_option_toggled(self, cell, path):
+        """Callback function for toggling an option
+
+        Toggling a parent option also toggles all its children.
+        When a child is toggled on, the parent is also toggled on.
+        When a child is toggled off, the parent is also toggled off if all children are toggled off.
+        """
         model = self.treeview_options.get_model()
         iter = model.get_iter(path)
         value = not model.get_value(iter, 1)
@@ -265,44 +271,46 @@ class BleachBitWindow(Gtk.Window):
         vbox.pack_start(search_entry, False, False, 0)
 
         # Create a TreeView to display the cleaning results
-        self.treeview = Gtk.TreeView()
+        self.results_treeview = Gtk.TreeView()
         scrolled = Gtk.ScrolledWindow()
         scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-        scrolled.add(self.treeview)
+        scrolled.add(self.results_treeview)
         vbox.pack_start(scrolled, True, True, 0)
 
         # Create a ListStore to hold the data
-        self.liststore = Gtk.ListStore(str, str, str, int, str)
-        self.treeview.set_model(self.liststore)
+        self.results_liststore = Gtk.ListStore(str, str, str, int, str)
+        self.results_treeview.set_model(self.results_liststore)
 
         # Create columns: cleaner, option, filename, file size, action.
         renderer = Gtk.CellRendererText()
         column = Gtk.TreeViewColumn("Cleaner", renderer, text=0)
         column.set_sort_column_id(0)
-        self.treeview.append_column(column)
+        self.results_treeview.append_column(column)
 
         column = Gtk.TreeViewColumn("Option", renderer, text=1)
         column.set_sort_column_id(1)
-        self.treeview.append_column(column)
+        self.results_treeview.append_column(column)
 
         column = Gtk.TreeViewColumn("Filename", renderer, text=2)
         column.set_sort_column_id(2)
-        self.treeview.append_column(column)
+        self.results_treeview.append_column(column)
 
         column = Gtk.TreeViewColumn("File size (B)", renderer, text=3)
         column.set_sort_column_id(3)
-        self.treeview.append_column(column)
+        self.results_treeview.append_column(column)
 
         column = Gtk.TreeViewColumn("Action", renderer, text=4)
         column.set_sort_column_id(4)
-        self.treeview.append_column(column)
+        self.results_treeview.append_column(column)
 
         # Allow user to seelct multple rows for whitelisting.
-        self.treeview.get_selection().set_mode(Gtk.SelectionMode.MULTIPLE)
+        self.results_treeview.get_selection().set_mode(Gtk.SelectionMode.MULTIPLE)
 
         # Add a context menu.
-        self.treeview.connect("button-press-event",
+        self.results_treeview.connect("button-press-event",
                               self.on_file_result_context_menu)
+
+        self.results_treeview.get_selection().connect("changed", self.on_selection_changed)
 
         self.treeview.get_selection().connect("changed", self.on_selection_changed)
 
@@ -327,7 +335,7 @@ class BleachBitWindow(Gtk.Window):
         # 3 is the right mouse button
         if not event.button == 3:
             return
-        selection = self.treeview.get_selection()
+        selection = self.results_treeview.get_selection()
         model, pathlist = selection.get_selected_rows()
         for path in pathlist:
             tree_iter = model.get_iter(path)
@@ -359,11 +367,11 @@ class BleachBitWindow(Gtk.Window):
         """In background thread, run a worker and populate the liststore"""
         self.abort_event.clear()
         self.abort_button.set_sensitive(True)
-        self.liststore.clear()
+        self.results_liststore.clear()
         for row in self._populate_data_iterator(is_delete):
             if self.abort_event.is_set():
                 break
-            self.liststore.append(row)
+            self.results_liststore.append(row)
         self.abort_button.set_sensitive(False)
 
     def _populate_data_iterator(self, is_delete=True):
@@ -393,13 +401,13 @@ class BleachBitWindow(Gtk.Window):
                 }.get(option_name)
                 filename = os.path.join(root_dir, f'{service_name}/foo-{str(random.randint(0, 100))}.bar')
             else:
-            option_name = random.choice(
-                ["Cache", "History", "Cookies", "Sessions", "Passwords"])
-            filename = os.path.join(os.path.expanduser(
-                "~"), ".config", cleaner_name, option_name, str(random.randint(0, 100)))
-            if option_name == 'Cache':
+                option_name = random.choice(
+                    ["Cache", "History", "Cookies", "Sessions", "Passwords"])
                 filename = os.path.join(os.path.expanduser(
-                    "~"), ".cache", cleaner_name, str(random.randint(0, 100)))
+                    "~"), ".config", cleaner_name, option_name, str(random.randint(0, 100)))
+                if option_name == 'Cache':
+                    filename = os.path.join(os.path.expanduser(
+                        "~"), ".cache", cleaner_name, str(random.randint(0, 100)))
             size = random.randint(0, 100000)
             result_random = random.random()
             if is_delete:
@@ -422,17 +430,17 @@ class BleachBitWindow(Gtk.Window):
 
     def on_preview_clicked(self, button):
         # Clear the previous cleaning results and populate a new list of files
-        self.liststore.clear()
+        self.results_liststore.clear()
         self.populate_data(is_delete=False)
 
     def on_clean_clicked(self, button):
         # Clear the previous cleaning results and populate a new list of files
-        self.liststore.clear()
+        self.results_liststore.clear()
         self.populate_data(is_delete=True)
 
     def on_whitelist_clicked(self, button):
         # Get the selected rows
-        selection = self.treeview.get_selection()
+        selection = self.results_treeview.get_selection()
         model, paths = selection.get_selected_rows()
         for path in paths:
             # Get the filename
