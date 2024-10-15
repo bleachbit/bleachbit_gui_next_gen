@@ -65,6 +65,16 @@ cleaner_data = {
 }
 
 
+def format_file_size(size):
+    if size < 1024:
+        return f"{size} B"
+    elif size < 1024 ** 2:
+        return f"{size / 1024:.2f} KB"
+    elif size < 1024 ** 3:
+        return f"{size / 1024 ** 2:.2f} MB"
+    else:
+        return f"{size / 1024 ** 3:.2f} GB"
+
 class BleachBitWindow(Gtk.Window):
     def __init__(self):
         super().__init__(title="Prototype of Next-Generation GUI for BleachBit")
@@ -327,6 +337,7 @@ class BleachBitWindow(Gtk.Window):
 
         column = Gtk.TreeViewColumn("File size (B)", renderer, text=3)
         column.set_sort_column_id(3)
+        column.set_cell_data_func(renderer, lambda column, cell, model, iter, data: cell.set_property('text', format_file_size(model.get_value(iter, 3))))
         self.results_treeview.append_column(column)
 
         column = Gtk.TreeViewColumn("Action", renderer, text=4)
@@ -448,7 +459,7 @@ class BleachBitWindow(Gtk.Window):
                 "zebra-zapper",
                 "taco-teller"])
             filename = data["path"].format(randint=str(random.randint(0, 100)), service_name=service_name)
-            size = random.randint(0, 100000)
+            size = random.randint(0, int(2e9))
             result_random = random.random()
             if is_delete:
                 if result_random < 0.05:
