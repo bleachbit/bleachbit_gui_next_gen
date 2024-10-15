@@ -281,11 +281,13 @@ class BleachBitWindow(Gtk.Window):
         self.abort_button.connect("clicked", self.on_abort_clicked)
         toolbar.insert(self.abort_button, 2)
 
-        self.whitelist_button = Gtk.ToolButton(
-            stock_id=Gtk.STOCK_ADD, label="Whitelist")
-        self.whitelist_button.connect("clicked", self.on_whitelist_clicked)
-        toolbar.insert(self.whitelist_button, 3)
-        self.whitelist_button.set_sensitive(False)
+        self.skip_list_button = Gtk.ToolButton(
+            stock_id=Gtk.STOCK_ADD, label="Skip file")
+        self.skip_list_button.connect("clicked", self.on_skip_file_clicked)
+        self.skip_list_button.set_tooltip_text(
+            "Always skip the selected files, so they are never cleaned.")
+        toolbar.insert(self.skip_list_button, 3)
+        self.skip_list_button.set_sensitive(False)
 
         vbox.pack_start(toolbar, False, False, 0)
 
@@ -380,7 +382,7 @@ class BleachBitWindow(Gtk.Window):
         """Enable whitelist button on toolbar when 1+ rows are selected"""
         model, paths = selection.get_selected_rows()
         sensitive = len(paths) > 0
-        self.whitelist_button.set_sensitive(sensitive)
+        self.skip_list_button.set_sensitive(sensitive)
 
     def on_copy_path_activated(self, widget, filenames):
         """Copy filename to clipboard"""
@@ -412,9 +414,9 @@ class BleachBitWindow(Gtk.Window):
         open_file_location_item = Gtk.MenuItem.new_with_label(
             "Open file location")
         menu.append(open_file_location_item)
-        whitelist_item = Gtk.MenuItem.new_with_label("Whitelist")
-        # whitelist_item.connect("activate", self.on_whitelist_activated, filename)
-        menu.append(whitelist_item)
+        skip_item = Gtk.MenuItem.new_with_label("Always skip this file")
+        skip_item.connect("activate", lambda _item: self.on_skip_file_clicked(filenames))
+        menu.append(skip_item)
         menu.show_all()
         menu.popup(None, None, None, None, event.button, event.time)
         # True maintains selection of multiple rows.
@@ -489,14 +491,19 @@ class BleachBitWindow(Gtk.Window):
         self.results_liststore.clear()
         self.populate_data(is_delete=True)
 
-    def on_whitelist_clicked(self, button):
+    def on_skip_file_clicked(self, button):
         # Get the selected rows
         selection = self.results_treeview.get_selection()
         model, paths = selection.get_selected_rows()
         for path in paths:
             # Get the filename
             filename = model[path][2]
+            
             print(f"Whitelisted: {filename}")
+        if len(paths) == 1:
+            self.statusbar.push(0, f"Whitelisted: {filename}")
+        else:
+            self.statusbar.push(0, f"Whitelisted {len(paths)} file(s)")
 
 
 if __name__ == "__main__":
