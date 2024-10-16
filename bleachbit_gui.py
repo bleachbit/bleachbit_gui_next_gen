@@ -277,11 +277,13 @@ class BleachBitWindow(Gtk.Window):
 
         self.preview_button = Gtk.ToolButton(
             stock_id=Gtk.STOCK_REFRESH, label="Preview")
-        self.preview_button.connect("clicked", lambda widget: threading.Thread(target=self.clean_files_worker, args=(False,)).start())
+        self.preview_button.connect("clicked", lambda widget: threading.Thread(
+            target=self.clean_files_worker, args=(False,)).start())
         toolbar.insert(self.preview_button, 0)
 
         self.clean_button = Gtk.ToolButton(stock_id=Gtk.STOCK_CLEAR, label="Clean")
-        self.clean_button.connect("clicked", lambda widget: threading.Thread(target=self.clean_files_worker, args=(True,)).start())
+        self.clean_button.connect("clicked", lambda widget: threading.Thread(
+            target=self.clean_files_worker, args=(True,)).start())
         toolbar.insert(self.clean_button, 1)
 
         self.abort_button = Gtk.ToolButton(
@@ -300,7 +302,8 @@ class BleachBitWindow(Gtk.Window):
 
         self.wipe_free_space_button = Gtk.ToolButton(
             stock_id=Gtk.STOCK_DELETE, label="Wipe free space")
-        self.wipe_free_space_button.connect("clicked", lambda widget: threading.Thread(target=self.wipe_free_space_worker).start())
+        self.wipe_free_space_button.connect("clicked", lambda widget: threading.Thread(
+            target=self.wipe_free_space_worker).start())
         toolbar.insert(self.wipe_free_space_button, 4)
 
         vbox.pack_start(toolbar, False, False, 0)
@@ -353,7 +356,8 @@ class BleachBitWindow(Gtk.Window):
 
         column = Gtk.TreeViewColumn("File size (B)", renderer, text=3)
         column.set_sort_column_id(3)
-        column.set_cell_data_func(renderer, lambda column, cell, model, iter, data: cell.set_property('text', format_file_size(model.get_value(iter, 3))))
+        column.set_cell_data_func(renderer, lambda column, cell, model, iter,
+                                  data: cell.set_property('text', format_file_size(model.get_value(iter, 3))))
         self.results_treeview.append_column(column)
 
         column = Gtk.TreeViewColumn("Action", renderer, text=4)
@@ -386,7 +390,8 @@ class BleachBitWindow(Gtk.Window):
 
         space_renderer = Gtk.CellRendererText()
         space_column = Gtk.TreeViewColumn("Free space (B)", space_renderer, text=1)
-        space_column.set_cell_data_func(space_renderer, lambda column, cell, model, iter, data: cell.set_property('text', format_file_size(model.get_value(iter, 1))))
+        space_column.set_cell_data_func(space_renderer, lambda column, cell, model, iter,
+                                        data: cell.set_property('text', format_file_size(model.get_value(iter, 1))))
         space_column.set_sort_column_id(1)
         self.wipe_free_space_treeview.append_column(space_column)
 
