@@ -29,6 +29,7 @@ FIXME:
 """
 
 # standard library imports
+
 import random
 import time
 import threading
@@ -36,7 +37,7 @@ import threading
 # third-party imports
 import gi
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, Gdk, GObject
+from gi.repository import Gtk, Gdk, GObject  # nopep8
 
 cleaner_data = {
     "Chrome": {
@@ -317,7 +318,7 @@ class BleachBitWindow(Gtk.Window):
         """
 
         # Create a vertical box to hold the search entry and the scrolled window
-        self.file_results_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)        
+        self.file_results_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
 
         # Create a search box
         search_entry = Gtk.SearchEntry(width_chars=100)
@@ -473,14 +474,14 @@ class BleachBitWindow(Gtk.Window):
         This simulates a worker that cleans the system 
         """
         self.abort_event.clear()
-        self.set_toolbar_buttons_working(True)
+        self.set_toolbar_buttons_working(True, True)
         self.show_right_pane(self.file_results_vbox)
         self.results_liststore.clear()
         for row in self.fake_cleaner_iterator(is_delete):
             if self.abort_event.is_set():
                 break
             self.results_liststore.append(row)
-        self.set_toolbar_buttons_working(False)
+        self.set_toolbar_buttons_working(False, True)
 
     def fake_cleaner_iterator(self, is_delete=True):
         """Simulate a worker iterator that cleans the system"""
@@ -526,7 +527,7 @@ class BleachBitWindow(Gtk.Window):
 
     def wipe_free_space_worker(self):
         """Runs as a background thread to wipe free space"""
-        self.set_toolbar_buttons_working(True)
+        self.set_toolbar_buttons_working(True, False)
         self.show_right_pane(self.wipe_free_scrolled)
         wipe_paths = ('/tmp', '~/.cache', '/mnt/external')
         min_size = 1 * 1024 * 1024  # 1 MB
@@ -546,15 +547,22 @@ class BleachBitWindow(Gtk.Window):
                 row[2] = progress_percent
                 time.sleep(path_rate)
 
-        self.set_toolbar_buttons_working(False)
+        self.set_toolbar_buttons_working(False, False)
 
-    def set_toolbar_buttons_working(self, is_working):
-        """Set the toolbar buttons to a working state or not"""
+    def set_toolbar_buttons_working(self, is_working, is_files_mode):
+        """Set the toolbar buttons to a working state or not
+
+        is_working: True if the system is working; False if ready for user input
+        is_files_mode: True if the file results pane is showing
+
+
+        """
         self.abort_event.clear()
         self.abort_button.set_sensitive(is_working)
         self.preview_button.set_sensitive(not is_working)
         self.clean_button.set_sensitive(not is_working)
         self.wipe_free_space_button.set_sensitive(not is_working)
+        self.skip_list_button.set_sensitive(not is_working and is_files_mode)
 
     def on_skip_file_clicked(self, button):
         # Get the selected rows
