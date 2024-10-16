@@ -22,13 +22,13 @@
 
 
 FIXME:
-Feature to deselect individual items in preview results #3
-https://github.com/bleachbit/wishlist/issues/3
+* Feature to deselect individual items in preview results #3 https://github.com/bleachbit/wishlist/issues/3
+* Feature to select all cleaning options
+* Show multiple warnings at once when enabling cleaning options
+
 """
 
 # standard library imports
-
-import os
 import random
 import time
 import threading
@@ -36,7 +36,7 @@ import threading
 # third-party imports
 import gi
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk
+from gi.repository import Gtk, Gdk, GObject
 
 cleaner_data = {
     "Chrome": {
@@ -72,8 +72,13 @@ def format_file_size(size):
         return f"{size / 1024:.2f} KB"
     elif size < 1024 ** 3:
         return f"{size / 1024 ** 2:.2f} MB"
-    else:
+    elif size < 1024 ** 4:
         return f"{size / 1024 ** 3:.2f} GB"
+    elif size < 1024 ** 5:
+        return f"{size / 1024 ** 4:.2f} TB"
+    else:
+        return f"{size / 1024 ** 5:.2f} PB"
+
 
 class BleachBitWindow(Gtk.Window):
     def __init__(self):
@@ -87,12 +92,14 @@ class BleachBitWindow(Gtk.Window):
         self.create_toolbar(vbox)
 
         # Split the window horizontally into two panes
-        paned = Gtk.Paned()
-        paned.set_position(200)
-        paned.set_wide_handle(True)
-        vbox.pack_start(paned, True, True, 0)
-        self.create_options_pane(paned)
-        self.create_results_pane(paned)
+        self.paned = Gtk.Paned()
+        self.paned.set_position(200)
+        self.paned.set_wide_handle(True)
+        vbox.pack_start(self.paned, True, True, 0)
+        self.create_options_pane(self.paned)
+        self.create_wipe_free_space_pane()
+        self.create_file_results_pane()
+        self.show_right_pane(self.file_results_vbox)
 
         # Add status bar
         self.statusbar = Gtk.Statusbar()
@@ -100,6 +107,9 @@ class BleachBitWindow(Gtk.Window):
 
         # Coordinate the abort button
         self.abort_event = threading.Event()
+
+        # Gracefully close any background threads.
+        self.connect("destroy", lambda widget: self.abort_event.set())
 
     def create_menubar(self, vbox):
         """Create a menu bar"""
@@ -155,7 +165,7 @@ class BleachBitWindow(Gtk.Window):
 
         # Create a TreeView to display the available cleaning options
         self.treestore_options = Gtk.TreeStore(str, bool)
-        self.treeview_options = Gtk.TreeView(self.treestore_options)
+        self.treeview_options = Gtk.TreeView(model=self.treestore_options)
         self.option_filter = self.treestore_options.filter_new()
         self.option_filter.set_visible_func(self.on_search_changed_filter)
         self.treeview_options.set_model(self.option_filter)
@@ -230,8 +240,6 @@ class BleachBitWindow(Gtk.Window):
         """
 
         current_row = model.get_value(iter, 0)
-        print(f'Search changed filter: {
-              self.search_entry_text} current row: {current_row}')
         if not self.search_entry_text:
             return True
         if current_row.lower().find(self.search_entry_text.lower()) != -1:
@@ -266,19 +274,19 @@ class BleachBitWindow(Gtk.Window):
         toolbar = Gtk.Toolbar()
         toolbar.set_style(Gtk.ToolbarStyle.BOTH)  # Show text and icon.
 
-        preview_button = Gtk.ToolButton(
+        self.preview_button = Gtk.ToolButton(
             stock_id=Gtk.STOCK_REFRESH, label="Preview")
-        preview_button.connect("clicked", self.on_preview_clicked)
-        toolbar.insert(preview_button, 0)
+        self.preview_button.connect("clicked", lambda widget: threading.Thread(target=self.clean_files_worker, args=(False,)).start())
+        toolbar.insert(self.preview_button, 0)
 
-        clean_button = Gtk.ToolButton(stock_id=Gtk.STOCK_CLEAR, label="Clean")
-        clean_button.connect("clicked", self.on_clean_clicked)
-        toolbar.insert(clean_button, 1)
+        self.clean_button = Gtk.ToolButton(stock_id=Gtk.STOCK_CLEAR, label="Clean")
+        self.clean_button.connect("clicked", lambda widget: threading.Thread(target=self.clean_files_worker, args=(True,)).start())
+        toolbar.insert(self.clean_button, 1)
 
         self.abort_button = Gtk.ToolButton(
             stock_id=Gtk.STOCK_STOP, label="Abort")
         self.abort_button.set_sensitive(False)
-        self.abort_button.connect("clicked", self.on_abort_clicked)
+        self.abort_button.connect("clicked", lambda widget: self.abort_event.set())
         toolbar.insert(self.abort_button, 2)
 
         self.skip_list_button = Gtk.ToolButton(
@@ -289,9 +297,14 @@ class BleachBitWindow(Gtk.Window):
         toolbar.insert(self.skip_list_button, 3)
         self.skip_list_button.set_sensitive(False)
 
+        self.wipe_free_space_button = Gtk.ToolButton(
+            stock_id=Gtk.STOCK_DELETE, label="Wipe free space")
+        self.wipe_free_space_button.connect("clicked", lambda widget: threading.Thread(target=self.wipe_free_space_worker).start())
+        toolbar.insert(self.wipe_free_space_button, 4)
+
         vbox.pack_start(toolbar, False, False, 0)
 
-    def create_results_pane(self, paned):
+    def create_file_results_pane(self):
         """Create a pane for search results
 
         The search pane contains a search box and a TreeView with list of files
@@ -302,22 +315,22 @@ class BleachBitWindow(Gtk.Window):
         Returns:
             None
         """
+
         # Create a vertical box to hold the search entry and the scrolled window
-        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        paned.add2(vbox)
+        self.file_results_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)        
 
         # Create a search box
         search_entry = Gtk.SearchEntry(width_chars=100)
         search_entry.set_placeholder_text("Search")
         search_entry.connect("changed", self.on_results_search_changed)
-        vbox.pack_start(search_entry, False, False, 0)
+        self.file_results_vbox.pack_start(search_entry, False, False, 0)
 
         # Create a TreeView to display the cleaning results
         self.results_treeview = Gtk.TreeView()
-        scrolled = Gtk.ScrolledWindow()
-        scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-        scrolled.add(self.results_treeview)
-        vbox.pack_start(scrolled, True, True, 0)
+        file_results_scrolled = Gtk.ScrolledWindow()
+        file_results_scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        file_results_scrolled.add(self.results_treeview)
+        self.file_results_vbox.pack_start(file_results_scrolled, True, True, 0)
 
         # Create a ListStore to hold the data
         self.results_liststore = Gtk.ListStore(str, str, str, int, str)
@@ -356,6 +369,43 @@ class BleachBitWindow(Gtk.Window):
         self.results_treeview.get_selection().connect(
             "changed", self.on_selection_changed)
 
+    def create_wipe_free_space_pane(self):
+        """Create a pane for wiping free space
+
+        Each row has columns: path name, free space (B), progress bar.
+        This function creates a widget without displaying it.
+        """
+
+        self.wipe_free_space_liststore = Gtk.ListStore(str, GObject.TYPE_INT64, int)
+        self.wipe_free_space_treeview = Gtk.TreeView(model=self.wipe_free_space_liststore)
+        path_renderer = Gtk.CellRendererText()
+        path_column = Gtk.TreeViewColumn("Path name", path_renderer, text=0)
+        path_column.set_sort_column_id(0)
+        self.wipe_free_space_treeview.append_column(path_column)
+
+        space_renderer = Gtk.CellRendererText()
+        space_column = Gtk.TreeViewColumn("Free space (B)", space_renderer, text=1)
+        space_column.set_cell_data_func(space_renderer, lambda column, cell, model, iter, data: cell.set_property('text', format_file_size(model.get_value(iter, 1))))
+        space_column.set_sort_column_id(1)
+        self.wipe_free_space_treeview.append_column(space_column)
+
+        progress_renderer = Gtk.CellRendererProgress()
+        progress_column = Gtk.TreeViewColumn("Progress", progress_renderer, value=2)
+        self.wipe_free_space_treeview.append_column(progress_column)
+
+        self.wipe_free_scrolled = Gtk.ScrolledWindow()
+        self.wipe_free_scrolled.add(self.wipe_free_space_treeview)
+
+    def show_right_pane(self, right_pane_widget):
+        assert hasattr(self, "wipe_free_scrolled")
+        right_pane = self.paned.get_child2()
+        if right_pane == right_pane_widget:
+            return
+        if right_pane:
+            self.paned.remove(right_pane)
+        self.paned.add2(right_pane_widget)
+        self.show_all()
+
     def on_results_search_changed(self, entry):
         """Callback function for search box"""
         self.search_entry_text = entry.get_text()
@@ -374,10 +424,6 @@ class BleachBitWindow(Gtk.Window):
                 return True
         return False
 
-    def on_abort_clicked(self, button):
-        """Callback function for abort button"""
-        self.abort_event.set()
-
     def on_selection_changed(self, selection):
         """Enable whitelist button on toolbar when 1+ rows are selected"""
         model, paths = selection.get_selected_rows()
@@ -386,7 +432,6 @@ class BleachBitWindow(Gtk.Window):
 
     def on_copy_path_activated(self, widget, filenames):
         """Copy filename to clipboard"""
-        from gi.repository import Gdk
         clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
         if len(filenames) == 1:
             self.statusbar.push(0, f"Copied {filenames[0]} to clipboard")
@@ -422,24 +467,22 @@ class BleachBitWindow(Gtk.Window):
         # True maintains selection of multiple rows.
         return True
 
-    def populate_data(self, is_delete=True):
-        """Launch a thread to populate the data"""
-        thread = threading.Thread(
-            target=self._populate_data, args=(is_delete,))
-        thread.start()
+    def clean_files_worker(self, is_delete=True):
+        """In background thread, run a worker to populate the liststore
 
-    def _populate_data(self, is_delete=True):
-        """In background thread, run a worker and populate the liststore"""
+        This simulates a worker that cleans the system 
+        """
         self.abort_event.clear()
-        self.abort_button.set_sensitive(True)
+        self.set_toolbar_buttons_working(True)
+        self.show_right_pane(self.file_results_vbox)
         self.results_liststore.clear()
-        for row in self._populate_data_iterator(is_delete):
+        for row in self.fake_cleaner_iterator(is_delete):
             if self.abort_event.is_set():
                 break
             self.results_liststore.append(row)
-        self.abort_button.set_sensitive(False)
+        self.set_toolbar_buttons_working(False)
 
-    def _populate_data_iterator(self, is_delete=True):
+    def fake_cleaner_iterator(self, is_delete=True):
         """Simulate a worker iterator that cleans the system"""
         num_files = random.randint(5, 100)
         for _ in range(num_files):
@@ -448,7 +491,7 @@ class BleachBitWindow(Gtk.Window):
             option_name = random.choice(
                 list(cleaner_data[cleaner_name].keys()))
             data = cleaner_data[cleaner_name][option_name]
-            service_name=random.choice([
+            service_name = random.choice([
                 "pancake-flipper",
                 "unicorn-tracker",
                 "robot-reporter",
@@ -481,15 +524,37 @@ class BleachBitWindow(Gtk.Window):
             time.sleep(sleep_time_sec)
             yield [cleaner_name, option_name, filename, size, result]
 
-    def on_preview_clicked(self, button):
-        # Clear the previous cleaning results and populate a new list of files
-        self.results_liststore.clear()
-        self.populate_data(is_delete=False)
+    def wipe_free_space_worker(self):
+        """Runs as a background thread to wipe free space"""
+        self.set_toolbar_buttons_working(True)
+        self.show_right_pane(self.wipe_free_scrolled)
+        wipe_paths = ('/tmp', '~/.cache', '/mnt/external')
+        min_size = 1 * 1024 * 1024  # 1 MB
+        max_size = 4 * 1024 * 1024 * 1024 * 1024  # 4 TB
+        self.wipe_free_space_liststore.clear()
+        for wipe_path in wipe_paths:
+            free_space_bytes = random.randint(min_size, max_size)
+            self.wipe_free_space_liststore.append([wipe_path, free_space_bytes, False])
 
-    def on_clean_clicked(self, button):
-        # Clear the previous cleaning results and populate a new list of files
-        self.results_liststore.clear()
-        self.populate_data(is_delete=True)
+        for row in self.wipe_free_space_liststore:
+            if self.abort_event.is_set():
+                break
+            path_rate = random.uniform(0.01, 0.1)
+            for progress_percent in range(100):
+                if self.abort_event.is_set():
+                    break
+                row[2] = progress_percent
+                time.sleep(path_rate)
+
+        self.set_toolbar_buttons_working(False)
+
+    def set_toolbar_buttons_working(self, is_working):
+        """Set the toolbar buttons to a working state or not"""
+        self.abort_event.clear()
+        self.abort_button.set_sensitive(is_working)
+        self.preview_button.set_sensitive(not is_working)
+        self.clean_button.set_sensitive(not is_working)
+        self.wipe_free_space_button.set_sensitive(not is_working)
 
     def on_skip_file_clicked(self, button):
         # Get the selected rows
@@ -498,7 +563,7 @@ class BleachBitWindow(Gtk.Window):
         for path in paths:
             # Get the filename
             filename = model[path][2]
-            
+
             print(f"Whitelisted: {filename}")
         if len(paths) == 1:
             self.statusbar.push(0, f"Whitelisted: {filename}")
@@ -507,6 +572,7 @@ class BleachBitWindow(Gtk.Window):
 
 
 if __name__ == "__main__":
+    # GObject.threads_init() # Not needed since 3.11
     win = BleachBitWindow()
     win.set_icon_from_file("bleachbit.png")
     win.connect("destroy", Gtk.main_quit)
