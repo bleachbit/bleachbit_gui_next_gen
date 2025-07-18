@@ -159,8 +159,8 @@ class BleachBitWindow(Gtk.Window):
         # Create a search box to filter the options.
         self.search_entry = Gtk.SearchEntry(width_chars=20)
         self.search_entry.set_placeholder_text("Search")
-        self.search_entry_text = None
-        self.search_entry.connect("changed", self.on_search_entry_changed)
+        self.options_search_entry_text = None
+        self.search_entry.connect("changed", self.on_options_search_entry_changed)
 
         vbox.pack_start(self.search_entry, False, False, 0)
 
@@ -168,7 +168,7 @@ class BleachBitWindow(Gtk.Window):
         self.treestore_options = Gtk.TreeStore(str, bool)
         self.treeview_options = Gtk.TreeView(model=self.treestore_options)
         self.option_filter = self.treestore_options.filter_new()
-        self.option_filter.set_visible_func(self.on_search_changed_filter)
+        self.option_filter.set_visible_func(self.on_options_search_changed_filter)
         self.treeview_options.set_model(self.option_filter)
         vbox.pack_start(self.treeview_options, True, True, 0)
 
@@ -223,12 +223,12 @@ class BleachBitWindow(Gtk.Window):
                 child_iter = model.iter_next(child_iter)
             model.set_value(parent_iter, 1, has_active_child)
 
-    def on_search_entry_changed(self, entry):
+    def on_options_search_entry_changed(self, entry):
         """Callback function for user typing in the options search box."""
-        self.search_entry_text = self.search_entry.get_text()
+        self.options_search_entry_text = self.search_entry.get_text()
         self.option_filter.refilter()
 
-    def on_search_changed_filter(self, model, iter, data):
+    def on_options_search_changed_filter(self, model, iter, data):
         """Callback function for each row in the options TreeView.
 
         This is called for row to set its visibility.
@@ -241,21 +241,21 @@ class BleachBitWindow(Gtk.Window):
         """
 
         current_row = model.get_value(iter, 0)
-        if not self.search_entry_text:
+        if not self.options_search_entry_text:
             return True
-        if current_row.lower().find(self.search_entry_text.lower()) != -1:
+        if current_row.lower().find(self.options_search_entry_text.lower()) != -1:
             return True
 
         parent_iter = model.iter_parent(iter)
         if parent_iter is not None:
             parent_name = model.get_value(parent_iter, 0)
-            if parent_name.lower().find(self.search_entry_text.lower()) != -1:
+            if parent_name.lower().find(self.options_search_entry_text.lower()) != -1:
                 return True
         # If the search box matches a child, show this child and its parent
         child_iter = model.iter_children(iter)
         while child_iter is not None:
             child_name = model.get_value(child_iter, 0)
-            if child_name.lower().find(self.search_entry_text.lower()) != -1:
+            if child_name.lower().find(self.options_search_entry_text.lower()) != -1:
                 return True
             child_iter = model.iter_next(child_iter)
         return False
@@ -309,9 +309,9 @@ class BleachBitWindow(Gtk.Window):
         vbox.pack_start(toolbar, False, False, 0)
 
     def create_file_results_pane(self):
-        """Create a pane for search results
+        """Create a pane for file cleaning results
 
-        The search pane contains a search box and a TreeView with list of files
+        The results pane contains a search box and a TreeView with list of files
 
         Args:
             paned (Gtk.Paned): The parent pane
@@ -413,20 +413,25 @@ class BleachBitWindow(Gtk.Window):
         self.show_all()
 
     def on_results_search_changed(self, entry):
-        """Callback function for search box"""
-        self.search_entry_text = entry.get_text()
-        self.liststore_filter = self.results_liststore.filter_new()
-        self.liststore_filter.set_visible_func(
+        """Callback function for search box in results pane"""
+        self.options_search_entry_text = entry.get_text()
+        self.results_liststore_filter = self.results_liststore.filter_new()
+        self.results_liststore_filter.set_visible_func(
             self.on_results_search_changed_filter)
-        self.sorted_model = Gtk.TreeModelSort(model=self.liststore_filter)
+        self.sorted_model = Gtk.TreeModelSort(model=self.results_liststore_filter)
         self.results_treeview.set_model(self.sorted_model)
 
     def on_results_search_changed_filter(self, model, iter, data):
-        if not self.search_entry_text:
+        """ 
+        Filter function for results liststore. Returns True if row should be
+        visible, False if it should be hidden.
+        """
+        if not self.options_search_entry_text:
             return True
         for i in range(3):
+            # Compare text in search box to text in columns 0,1,2.
             current_row = model.get_value(iter, i)
-            if current_row.lower().find(self.search_entry_text.lower()) != -1:
+            if current_row.lower().find(self.options_search_entry_text.lower()) != -1:
                 return True
         return False
 
