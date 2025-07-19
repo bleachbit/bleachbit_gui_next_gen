@@ -591,6 +591,8 @@ class BleachBitWindow(Gtk.Window):
 
 if __name__ == "__main__":
     # GObject.threads_init() # Not needed since 3.11
+    Gtk.Settings.get_default().set_property('gtk-application-prefer-dark-theme', True)
+    Gtk.Settings.get_default().set_property('gtk-xft-rgba', 'none') 
     win = BleachBitWindow()
     win.set_icon_from_file("bleachbit.png")
     win.connect("destroy", Gtk.main_quit)
