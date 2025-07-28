@@ -29,10 +29,13 @@ FIXME:
 """
 
 # standard library imports
-
+import os
 import random
 import time
 import threading
+
+# Force the font renderer backend.  Must be set early, before GTK/Pango initialise.
+os.environ["PANGOCAIRO_BACKEND"] = "fc"
 
 # third-party imports
 import gi
@@ -591,6 +594,7 @@ class BleachBitWindow(Gtk.Window):
 
 if __name__ == "__main__":
     # GObject.threads_init() # Not needed since 3.11
+    Gtk.Settings.get_default().set_property('gtk-application-prefer-dark-theme', True)
     win = BleachBitWindow()
     win.set_icon_from_file("bleachbit.png")
     win.connect("destroy", Gtk.main_quit)
