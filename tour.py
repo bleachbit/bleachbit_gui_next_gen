@@ -1,6 +1,6 @@
 import gi
 gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk
+from gi.repository import Gtk, GLib, Gdk
 
 steps = [
     {"widget": "preview_btn",  "text": "Click here to preview the changes"},
@@ -14,6 +14,9 @@ class TourManager:
         self.current = 0
         self.widget_map = widget_map  # dict of name -> widget
         self.popover = None
+        self.animation_timeout_id = None
+        self.animation_step = 0
+        self.highlight_overlay = None
 
     def add_step(self, widget_name, text):
         self.steps.append((widget_name, text))
@@ -22,34 +25,111 @@ class TourManager:
         self.current = 0
         self.show_step()
 
+    def stop_animation(self):
+        if self.animation_timeout_id:
+            GLib.source_remove(self.animation_timeout_id)
+            self.animation_timeout_id = None
+        if self.highlight_overlay:
+            self.highlight_overlay.destroy()
+            self.highlight_overlay = None
+
+    def animate_highlight(self):
+        if not self.popover or not self.popover.get_visible():
+            return False
+
+        self.animation_step = (self.animation_step + 1) % 20
+        # Gentle bounce or pulse effect could be added here if we had a drawing area
+        # For simplicity in Gtk 3.0 without complex custom drawing,
+        # let's just ensure the popover stays aligned or maybe pulse the widget's style
+        return True
+
     def show_step(self):
+        self.stop_animation()
         if self.popover:
             self.popover.popdown()
+            self.popover.destroy()
 
         name, text = self.steps[self.current]
         target = self.widget_map[name]
 
         self.popover = Gtk.Popover(relative_to=target)
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        box.set_margin_top(10); box.set_margin_bottom(10)
-        box.set_margin_start(10); box.set_margin_end(10)
+        self.popover.set_position(Gtk.PositionType.BOTTOM)
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        box.set_margin_top(15); box.set_margin_bottom(15)
+        box.set_margin_start(15); box.set_margin_end(15)
 
         label = Gtk.Label(label=text)
-        next_btn = Gtk.Button(label="Next" if self.current < len(self.steps)-1 else "Done")
+        label.set_line_wrap(True)
+        label.set_max_width_chars(30)
+        box.pack_start(label, False, False, 0)
+
+        # Button row
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+
+        prev_btn = Gtk.Button(label="Back")
+        prev_btn.set_sensitive(self.current > 0)
+        prev_btn.connect("clicked", self.prev_step)
+
+        skip_btn = Gtk.Button(label="Skip")
+        skip_btn.connect("clicked", self.skip_tour)
+
+        next_btn = Gtk.Button(label="Next" if self.current < len(self.steps)-1 else "Finish")
+        next_btn.get_style_context().add_class("suggested-action")
         next_btn.connect("clicked", self.next_step)
 
-        box.pack_start(label, False, False, 0)
-        box.pack_start(next_btn, False, False, 0)
-        box.show_all()
+        btn_box.pack_start(prev_btn, True, True, 0)
+        btn_box.pack_start(skip_btn, True, True, 0)
+        btn_box.pack_start(next_btn, True, True, 0)
 
+        box.pack_start(btn_box, False, False, 0)
+
+        box.show_all()
         self.popover.add(box)
         self.popover.popup()
+
+        # Start a simple "pulse" animation by toggling a style class, limited to ~2s
+        self.animation_step = 0
+        def pulse():
+            if not self.popover or not self.popover.get_visible() or self.animation_step >= 4:
+                target.get_style_context().remove_class("tour-highlight")
+                self.animation_timeout_id = None
+                return False
+
+            if self.animation_step % 2 == 0:
+                target.get_style_context().add_class("tour-highlight")
+            else:
+                target.get_style_context().remove_class("tour-highlight")
+
+            self.animation_step += 1
+            return True
+
+        # CSS for the highlight
+        css_provider = Gtk.CssProvider()
+        css_provider.load_from_data(b".tour-highlight { background: rgba(52, 152, 219, 0.3); border: 2px solid #3498db; }")
+        Gtk.StyleContext.add_provider_for_screen(
+            Gdk.Screen.get_default(),
+            css_provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+
+        self.animation_timeout_id = GLib.timeout_add(500, pulse)
 
     def next_step(self, _):
         self.current += 1
         if self.current < len(self.steps):
             self.show_step()
         else:
+            self.skip_tour(None)
+
+    def prev_step(self, _):
+        if self.current > 0:
+            self.current -= 1
+            self.show_step()
+
+    def skip_tour(self, _):
+        self.stop_animation()
+        if self.popover:
             self.popover.popdown()
 
 
