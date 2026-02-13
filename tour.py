@@ -14,6 +14,7 @@ class TourManager:
         self.current = 0
         self.widget_map = widget_map  # dict of name -> widget
         self.popover = None
+        self.revealer = None
         self.animation_timeout_id = None
         self.animation_step = 0
         self.highlight_overlay = None
@@ -29,6 +30,9 @@ class TourManager:
         if self.animation_timeout_id:
             GLib.source_remove(self.animation_timeout_id)
             self.animation_timeout_id = None
+        if self.revealer:
+            self.revealer.set_reveal_child(False)
+            self.revealer = None
         if self.highlight_overlay:
             self.highlight_overlay.destroy()
             self.highlight_overlay = None
@@ -84,9 +88,18 @@ class TourManager:
 
         box.pack_start(btn_box, False, False, 0)
 
-        box.show_all()
-        self.popover.add(box)
+        self.revealer = Gtk.Revealer()
+        self.revealer.set_transition_type(
+            Gtk.RevealerTransitionType.SLIDE_DOWN)
+        self.revealer.set_transition_duration(500)
+        self.revealer.set_reveal_child(False)
+        self.revealer.add(box)
+        self.revealer.show_all()
+        self.popover.add(self.revealer)
         self.popover.popup()
+        # Reveal the popover content via Gtk.Revealer after the popover
+        # starts presenting, to avoid drawing an empty shell.
+        GLib.idle_add(self.revealer.set_reveal_child, True)
 
         # Start a simple "pulse" animation by toggling a style class, limited to ~2s
         self.animation_step = 0
@@ -130,6 +143,8 @@ class TourManager:
     def skip_tour(self, _):
         self.stop_animation()
         if self.popover:
+            if self.revealer:
+                self.revealer.set_reveal_child(False)
             self.popover.popdown()
 
 
